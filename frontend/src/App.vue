@@ -9,6 +9,7 @@ const playing = ref(false)
 const muted = ref(false)
 const volume = ref(0.32)
 const note = ref('')
+const invitationImage = '/invitation/invitation.jpg'
 const wishes = ref([])
 const album = [
   { icon: '☁', title: '初见的那一天', date: '珍藏每一次心动', cls: 'peach', photo: '/photos/first-day.jpg' },
@@ -121,7 +122,7 @@ onUnmounted(() => { clearInterval(clockTimer); clearInterval(audioTimer); audioC
       <section id="百日之约" class="section invitation-section">
         <div class="invite-wrap">
           <div class="invite-intro"><span class="kicker">03 / A SPECIAL DAY</span><h2>一百天的<span>小小奇迹</span></h2><p>从第一声啼哭，到第一个微笑。<br/>每一天，都是生命送来的礼物。</p><div class="invite-date">♡ &nbsp; 百日宴 · 邀请函珍藏</div><p class="muted">这里可以放入你精心设计的百日宴邀请函，作为永远珍藏的纪念。</p></div>
-          <div class="invite-card"><div class="invite-border"><div class="invite-deco">✦ &nbsp; ✿ &nbsp; ✦</div><div class="invite-small">YOU ARE INVITED</div><div class="invite-script">One Hundred Days</div><div class="invite-main">百日之喜</div><div class="invite-rule"></div><div class="invite-message">时光温柔 · 见证成长<br/>愿所有美好与你不期而遇</div><div class="invite-bottom">WITH ALL OUR LOVE ♡</div><img src="/invitation/invitation.jpg" alt="百日宴邀请函" @error="photoError" /></div></div>
+          <div class="invite-card"><div class="invite-border"><div class="invite-deco">✦ &nbsp; ✿ &nbsp; ✦</div><div class="invite-small">YOU ARE INVITED</div><div class="invite-script">One Hundred Days</div><div class="invite-main">百日之喜</div><div class="invite-rule"></div><div class="invite-message">时光温柔 · 见证成长<br/>愿所有美好与你不期而遇</div><div class="invite-bottom">WITH ALL OUR LOVE ♡</div><img  :src="invitationImage" alt="百日宴邀请函" @error="photoError" /></div></div>
         </div>
       </section>
 
