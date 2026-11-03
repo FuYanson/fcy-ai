@@ -1,143 +1,98 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
-const sections = ['首页', '成长画廊', '时光手账', '百日之约']
-const active = ref('首页')
-const now = ref(new Date())
-const lightbox = ref(null)
+const mode = ref('table')
+const opened = ref(null)
+const page = ref(0)
 const playing = ref(false)
-const muted = ref(false)
-const volume = ref(0.32)
-const note = ref('')
-const invitationImage = '/invitation/invitation.jpg'
-const wishes = ref([])
-const album = [
-  { icon: '☁', title: '初见的那一天', date: '珍藏每一次心动', cls: 'peach', photo: '/photos/first-day.jpg' },
-  { icon: '✿', title: '甜甜的梦', date: '小小的你，大大的幸福', cls: 'lavender', photo: '/photos/sweet-dream.jpg' },
-  { icon: '☀', title: '第一次微笑', date: '世界因你而温柔', cls: 'butter', photo: '/photos/first-smile.jpg' },
-  { icon: '♡', title: '掌心里的爱', date: '每一天都值得纪念', cls: 'rose', photo: '/photos/little-hands.jpg' }
+const now = ref(new Date())
+const stories = [
+  { id:'hello', title:'初见 · 你好世界', subtitle:'故事从这一天开始', date:'第一篇 · 出生纪念', tag:'HELLO WORLD', x:8, y:48, rotate:-12, tone:'#dfc6b5', image:'https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=700&q=85', paragraphs:['第一次见到你，时间仿佛突然慢了下来。','原来世界上真的有一种幸福，只需要轻轻握住一只小手，就能感受到。','从今天起，我们会把每一个平凡又珍贵的日子，都好好收藏。'] },
+  { id:'dream', title:'甜甜的梦', subtitle:'愿每个梦都温柔', date:'第二篇 · 小小日常', tag:'SWEET DREAMS', x:26, y:34, rotate:8, tone:'#e6d6c9', image:'https://images.unsplash.com/photo-1522771930-78848d9293e8?w=700&q=85', paragraphs:['午后的光落在小小的脸颊上，连空气都变得安静。','你睡着的样子，是我们舍不得错过的风景。'] },
+  { id:'hands', title:'掌心里的爱', subtitle:'把小小的手握紧', date:'第三篇 · 成长点滴', tag:'LITTLE HANDS', x:44, y:55, rotate:-7, tone:'#d9c6a9', image:'https://images.unsplash.com/photo-1491013516836-7db643ee125a?w=700&q=85', paragraphs:['你用小小的手指握住我们的时候，仿佛也握住了整个世界。','希望多年以后，再翻到这一页，依然记得此刻的温度。'] },
+  { id:'smile', title:'第一次微笑', subtitle:'一整个世界都亮了', date:'第四篇 · 美好瞬间', tag:'FIRST SMILE', x:62, y:33, rotate:10, tone:'#d8c4b9', image:'https://images.unsplash.com/photo-1544126592-807ade215a0b?w=700&q=85', paragraphs:['那个不经意的微笑，成了今天最闪亮的礼物。','原来快乐可以如此简单，只是你对着我们笑了一下。'] },
+  { id:'hundred', title:'百日之约', subtitle:'一百天的温柔约定', date:'第五篇 · 百日纪念', tag:'100 DAYS', x:78, y:52, rotate:-8, tone:'#e4c8ba', image:'https://images.unsplash.com/photo-1519689680058-324335c77eba?w=700&q=85', paragraphs:['一百天，是一段短短的旅程，也是一份长长的爱。','愿你健康、勇敢、自由，永远被爱包围。','这里会收藏你的百日宴邀请函、祝福与那一天的照片。'] }
 ]
-const timeline = [
-  { day: 'DAY 01', title: '你好，世界', text: '我们的故事，从这一声啼哭开始。', icon: '✦' },
-  { day: 'FIRST MONTH', title: '满月快乐', text: '小小的你，正在慢慢长大。', icon: '☾' },
-  { day: 'DAY 100', title: '百日的约定', text: '愿你被爱包围，平安喜乐。', icon: '✿' },
-  { day: 'TO BE CONTINUED', title: '未来的每一天', text: '还有好多好多美好，等我们一起记录。', icon: '♡' }
-]
-const dateLabel = computed(() => now.value.toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric', timeZone:'Asia/Shanghai' }))
-let clockTimer, audioContext, audioTimer, melodyIndex = 0
-const notes = [392, 440, 523.25, 440, 349.23, 392, 440, 329.63, 349.23, 392, 523.25, 392, 293.66, 329.63, 349.23, 261.63]
-function navigate(section) {
-  active.value = section
-  document.getElementById(section)?.scrollIntoView({ behavior:'smooth' })
+const current = computed(()=> stories.find(s=>s.id===opened.value))
+const currentText = computed(()=>current.value?.paragraphs[page.value] || '')
+const dateText = computed(()=>now.value.toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',timeZone:'Asia/Shanghai'}))
+let timer, audioTimer, audioContext, noteIndex=0
+const melody=[392,440,523.25,440,349.23,392,440,329.63,349.23,392,523.25,392,293.66,329.63,349.23,261.63]
+function openStory(id){opened.value=id;page.value=0;document.body.style.overflow='hidden'}
+function closeStory(){opened.value=null;document.body.style.overflow=''}
+function nextPage(){if(current.value && page.value<current.value.paragraphs.length-1)page.value++}
+function prevPage(){if(page.value>0)page.value--}
+function handleKey(e){if(e.key==='Escape')closeStory();if(opened.value && e.key==='ArrowRight')nextPage();if(opened.value && e.key==='ArrowLeft')prevPage()}
+function tone(){
+ if(!audioContext||!playing.value)return
+ const o=audioContext.createOscillator(),g=audioContext.createGain(),t=audioContext.currentTime
+ o.type='sine';o.frequency.value=melody[noteIndex++%melody.length]
+ g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.022,t+.09);g.gain.exponentialRampToValueAtTime(.0001,t+.57)
+ o.connect(g).connect(audioContext.destination);o.start(t);o.stop(t+.59)
 }
-function tone() {
-  if (!audioContext || !playing.value || muted.value || volume.value === 0) return
-  const oscillator = audioContext.createOscillator()
-  const gain = audioContext.createGain()
-  oscillator.type = 'sine'
-  oscillator.frequency.value = notes[melodyIndex++ % notes.length]
-  const start = audioContext.currentTime
-  gain.gain.setValueAtTime(0.0001, start)
-  gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume.value * 0.085), start + 0.08)
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.54)
-  oscillator.connect(gain).connect(audioContext.destination)
-  oscillator.start(start)
-  oscillator.stop(start + 0.56)
+async function toggleMusic(){
+ if(playing.value){playing.value=false;clearInterval(audioTimer);return}
+ try{audioContext ||= new (window.AudioContext||window.webkitAudioContext)();await audioContext.resume();playing.value=true;tone();audioTimer=setInterval(tone,720)}catch{playing.value=false}
 }
-async function toggleMusic() {
-  if (playing.value) {
-    playing.value = false
-    clearInterval(audioTimer)
-    return
-  }
-  try {
-    audioContext ||= new (window.AudioContext || window.webkitAudioContext)()
-    await audioContext.resume()
-    playing.value = true
-    tone()
-    audioTimer = setInterval(tone, 650)
-  } catch (e) {
-    playing.value = false
-  }
-}
-function addWish() {
-  const value = note.value.trim()
-  if (!value) return
-  wishes.value.unshift({ text: value.slice(0, 120), id: Date.now() })
-  wishes.value = wishes.value.slice(0, 8)
-  note.value = ''
-}
-function photoError(event) { event.target.style.display = 'none' }
-onMounted(() => { clockTimer = setInterval(() => now.value = new Date(), 60_000) })
-onUnmounted(() => { clearInterval(clockTimer); clearInterval(audioTimer); audioContext?.close() })
+onMounted(()=>{window.addEventListener('keydown',handleKey);timer=setInterval(()=>now.value=new Date(),60000)})
+onUnmounted(()=>{window.removeEventListener('keydown',handleKey);document.body.style.overflow='';clearInterval(timer);clearInterval(audioTimer);audioContext?.close()})
 </script>
 
 <template>
-  <div class="site">
-    <header class="topbar">
-      <a class="brand" href="#首页" @click.prevent="navigate('首页')"><span class="brand-mark">✿</span><span>Little Universe <small>宝宝成长纪念馆</small></span></a>
-      <nav aria-label="主导航"><a v-for="item in sections" :key="item" :class="{ selected: active === item }" :href="'#' + item" @click.prevent="navigate(item)">{{ item }}</a></nav>
-      <button class="music-button" type="button" @click="toggleMusic" :aria-pressed="playing">{{ playing ? '♫ 音乐播放中' : '♫ 开启音乐' }}</button>
+<div class="memory-world">
+  <div class="sunlight"></div>
+  <div class="desk-props" aria-hidden="true">
+    <div class="coffee"><div class="coffee-liquid"><span>♡</span></div></div>
+    <div class="saucer"></div>
+    <div class="plant"><span class="leaf l1"></span><span class="leaf l2"></span><span class="leaf l3"></span><span class="leaf l4"></span><span class="leaf l5"></span><span class="leaf l6"></span><span class="leaf l7"></span><span class="leaf l8"></span><span class="plant-center"></span></div>
+    <div class="flower flower-left">✼ <i>✼</i> ✼</div>
+    <div class="flower flower-right">✻ <i>✼</i> ✻</div>
+    <div class="notebook"></div><div class="pencil"></div>
+  </div>
+  <main class="glass-board">
+    <header class="board-header">
+      <div class="identity"><span class="identity-icon">✿</span><div><strong>little moments</strong><small>一封写给成长的长信</small></div></div>
+      <div class="view-switch" aria-label="切换浏览模式"><button :class="{chosen:mode==='table'}" @click="mode='table'">▦ &nbsp; Table</button><button :class="{chosen:mode==='timeline'}" @click="mode='timeline'">◷ &nbsp; Timeline</button></div>
+      <button class="sound-control" :aria-pressed="playing" @click="toggleMusic">{{playing?'♫ 音乐播放中':'♫ 播放音乐'}}</button>
     </header>
 
-    <main>
-      <section id="首页" class="hero">
-        <div class="hero-sparkle s1">✧</div><div class="hero-sparkle s2">✦</div><div class="hero-sparkle s3">✧</div>
-        <div class="hero-copy">
-          <div class="eyebrow"><span class="line"></span> A LITTLE LOVE STORY <span class="line"></span></div>
-          <div class="tiny-tag">✿ &nbsp; 写给世界上最可爱的你 &nbsp; ✿</div>
-          <h1>你是落在<br/>人间的<span class="script">小星星<span class="star">✦</span></span></h1>
-          <p class="hero-sub">从遇见你的那一刻起，<br/>平凡的日子都有了闪闪发光的意义。</p>
-          <button class="primary" @click="navigate('成长画廊')">翻开我们的故事 <span>↗</span></button>
-          <div class="hero-foot"><span>EST. WITH LOVE ♡</span><span>{{ dateLabel }}</span></div>
-        </div>
-        <div class="hero-art" aria-hidden="true">
-          <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
-          <div class="cloud cloud-left">☁</div><div class="cloud cloud-right">☁</div>
-          <div class="moon">☾</div><div class="floating-heart heart-one">♡</div><div class="floating-heart heart-two">✧</div>
-          <div class="portrait"><div class="portrait-inner"><div class="baby-face">◡</div><span>HELLO, LITTLE ONE</span></div></div>
-          <div class="art-caption">Every little moment is magic.</div>
-        </div>
-      </section>
+    <div class="table-view" v-if="mode==='table'">
+      <div class="little-sticker sticker-one">✧<span>LOVE</span></div>
+      <div class="little-sticker sticker-two">♡<span>MEMORIES</span></div>
+      <div class="headline"><span class="overline">DEAR LITTLE ONE · OUR STORY</span><h1>那些微小的瞬间，<br/><em>都是永恒的闪光。</em></h1><p>把你的每一次成长，珍藏成一封写给未来的信。</p><div class="divider-star">✦ &nbsp; ✦ &nbsp; ✦</div></div>
+      <div class="photos-scene" aria-label="成长记忆照片桌面">
+        <button v-for="(story,index) in stories" :key="story.id" class="polaroid" :style="{'--x':story.x+'%','--y':story.y+'%','--r':story.rotate+'deg','--order':index+1,'--tone':story.tone}" @click="openStory(story.id)" :aria-label="'打开'+story.title+'的故事'">
+          <span class="photo-image" :style="{backgroundColor:story.tone}"><img :src="story.image" :alt="story.title" loading="lazy" @error="$event.target.style.display='none'"/><span class="photo-fallback">✿</span></span>
+          <span class="photo-handwriting">{{story.title}}</span><span class="photo-date">{{story.tag}}</span>
+          <span class="hover-hint">点击翻开回忆 ↗</span>
+        </button>
+      </div>
+      <div class="paper-note"><span class="note-pin">✳</span><span class="note-date">{{dateText}}</span><strong>给亲爱的你：</strong><p>愿你在漫长的岁月里，永远拥有热爱与勇气。这里的每一张照片，都藏着我们想对你说的话。</p><span class="note-sign">Love, Mom & Dad ♡</span><button @click="openStory('hello')">Read our story ↗</button></div>
+      <div class="table-bottom"><span>✿ &nbsp; EVERY MOMENT MATTERS</span><span>轻触一张照片，翻开一段回忆 &nbsp; ↗</span><span>01 — 05</span></div>
+    </div>
 
-      <section class="marquee"><span>♡ &nbsp; LITTLE MOMENTS, BIG LOVE &nbsp; ✦ &nbsp; 珍藏每一刻的温柔 &nbsp; ♡ &nbsp; LITTLE MOMENTS, BIG LOVE &nbsp; ✦ &nbsp; 珍藏每一刻的温柔 &nbsp; ♡</span></section>
+    <div v-else class="timeline-view">
+      <div class="timeline-intro"><span class="overline">OUR LITTLE TIMELINE</span><h2>时间走得很快，<br/><em>爱会慢慢长大。</em></h2><p>每一段故事，都值得再读一次。</p></div>
+      <div class="timeline-list"><button v-for="(story,index) in stories" :key="story.id" class="timeline-entry" @click="openStory(story.id)"><span class="timeline-number">0{{index+1}}</span><img :src="story.image" :alt="story.title" loading="lazy" @error="$event.target.style.opacity='0'"/><span class="timeline-words"><small>{{story.date}}</small><strong>{{story.title}}</strong><span>{{story.subtitle}}</span></span><span class="entry-arrow">↗</span></button></div>
+    </div>
+  </main>
+  <footer class="world-footer"><span>Made with ♡ for our little universe</span><span>时光会走远，爱永远在这里。</span></footer>
 
-      <section id="成长画廊" class="section gallery-section">
-        <div class="section-head"><div><span class="kicker">01 / OUR GALLERY</span><h2>成长<span>画廊</span><span class="flower">✿</span></h2><p>把日子装进相框，把爱留在时光里。</p></div><span class="hand-note">Little memories<br/>last forever ↗</span></div>
-        <div class="gallery-grid">
-          <button v-for="(item,i) in album" :key="item.title" class="photo-card" :class="item.cls" @click="lightbox = item">
-            <div class="photo-placeholder"><img :src="item.photo" :alt="item.title" @error="photoError" /><span class="photo-icon">{{ item.icon }}</span><span class="photo-placeholder-text">等待一张珍贵的照片</span></div>
-            <div class="photo-caption"><div><h3>{{ item.title }}</h3><p>{{ item.date }}</p></div><span>↗</span></div>
-            <span class="photo-number">0{{ i + 1 }}</span>
-          </button>
-        </div>
-        <p class="gallery-tip">✧ 画廊已预留照片位置，后续可上传真实照片替换占位画面</p>
-      </section>
-
-      <section id="时光手账" class="section timeline-section">
-        <div class="section-head centered"><span class="kicker">02 / OUR STORY</span><h2>写给你的<span>时光手账</span></h2><p>长大的每一步，都是值得庆祝的小奇迹。</p></div>
-        <div class="timeline"><div v-for="(item,i) in timeline" :key="item.day" class="milestone"><div class="milestone-symbol">{{ item.icon }}</div><div class="milestone-body"><span class="milestone-day">{{ item.day }}</span><h3>{{ item.title }}</h3><p>{{ item.text }}</p></div><span class="milestone-index">0{{ i + 1 }}</span></div></div>
-      </section>
-
-      <section id="百日之约" class="section invitation-section">
-        <div class="invite-wrap">
-          <div class="invite-intro"><span class="kicker">03 / A SPECIAL DAY</span><h2>一百天的<span>小小奇迹</span></h2><p>从第一声啼哭，到第一个微笑。<br/>每一天，都是生命送来的礼物。</p><div class="invite-date">♡ &nbsp; 百日宴 · 邀请函珍藏</div><p class="muted">这里可以放入你精心设计的百日宴邀请函，作为永远珍藏的纪念。</p></div>
-          <div class="invite-card"><div class="invite-border"><div class="invite-deco">✦ &nbsp; ✿ &nbsp; ✦</div><div class="invite-small">YOU ARE INVITED</div><div class="invite-script">One Hundred Days</div><div class="invite-main">百日之喜</div><div class="invite-rule"></div><div class="invite-message">时光温柔 · 见证成长<br/>愿所有美好与你不期而遇</div><div class="invite-bottom">WITH ALL OUR LOVE ♡</div><img  :src="invitationImage" alt="百日宴邀请函" @error="photoError" /></div></div>
-        </div>
-      </section>
-
-      <section class="section wishes-section"><div class="section-head centered"><span class="kicker">04 / SWEET WISHES</span><h2>留下一句<span>悄悄话</span></h2><p>把想对宝宝说的话，写成一封小小的情书。</p></div><div class="wish-panel"><div class="wish-quote">“愿你慢慢长大，<br/>愿你永远拥有发现美好的眼睛。”</div><form @submit.prevent="addWish"><label for="wish">写下你的祝福 ♡</label><textarea id="wish" v-model="note" maxlength="120" placeholder="亲爱的宝贝，愿你……" rows="3"></textarea><button class="primary" type="submit">珍藏这份祝福 ↗</button></form><p class="local-note">留言仅在当前页面临时展示，刷新后会清空，不会上传到服务器。</p><div v-if="wishes.length" class="wish-list"><div v-for="w in wishes" :key="w.id">♡ {{ w.text }}</div></div></div></section>
-    </main>
-
-    <footer><div class="footer-flower">✿</div><h2>愿你的世界，永远有光。</h2><p>Made with infinite love · fcy-ai</p><span>♡ EVERY DAY IS A GIFT ♡</span></footer>
-
-    <div v-if="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-label="照片详情" @click.self="lightbox=null"><div class="lightbox-card"><button class="close" @click="lightbox=null" aria-label="关闭">×</button><div class="lightbox-image" :class="lightbox.cls"><img :src="lightbox.photo" :alt="lightbox.title" @error="photoError"/><span>{{ lightbox.icon }}</span></div><h3>{{ lightbox.title }}</h3><p>{{ lightbox.date }}</p></div></div>
-    <div class="audio-panel" v-if="playing"><span>♫ 原创轻柔旋律</span><button @click="muted=!muted" :aria-label="muted?'取消静音':'静音'">{{ muted ? '🔇' : '♪' }}</button><input type="range" min="0" max="0.7" step="0.01" v-model.number="volume" aria-label="音乐音量" /></div>
-  </div>
+  <Transition name="story">
+    <div v-if="current" class="story-overlay" @click.self="closeStory">
+      <button class="close-story" @click="closeStory" aria-label="关闭故事">✕ &nbsp; 返回书桌</button>
+      <article class="storybook" :key="current.id">
+        <div class="book-photo"><img :src="current.image" :alt="current.title" @error="$event.target.style.opacity='0'"/><span class="book-photo-label">{{current.tag}}</span></div>
+        <div class="book-paper"><div class="book-topline"><span>✿ LITTLE MOMENTS</span><span>{{current.date}}</span></div><span class="book-sparkle">✧</span><h2>{{current.title}}</h2><span class="book-english">{{current.subtitle}}</span><p class="story-text" :key="page">{{currentText}}</p><div class="book-sign">写给长大后的你 ♡</div><div class="book-controls"><button @click="prevPage" :disabled="page===0">← 上一页</button><span>{{String(page+1).padStart(2,'0')}} / {{String(current.paragraphs.length).padStart(2,'0')}}</span><button @click="nextPage" :disabled="page===current.paragraphs.length-1">下一页 →</button></div></div>
+      </article>
+    </div>
+  </Transition>
+</div>
 </template>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap');
-:root{font-family:'DM Sans',system-ui,sans-serif;color:#554a46;background:#fffaf6;font-synthesis:none}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0}button,a{font:inherit}button{cursor:pointer}a{text-decoration:none;color:inherit}.site{overflow:hidden}.topbar{height:88px;display:flex;align-items:center;justify-content:space-between;padding:0 max(5vw,24px);background:#fffdfb;position:relative;z-index:3;border-bottom:1px solid #f4eae3}.brand{display:flex;align-items:center;gap:12px;font-size:19px;font-weight:700;color:#b47d75;letter-spacing:.2px}.brand-mark{font-size:34px;color:#dca39e}.brand small{display:block;font-size:10px;font-weight:500;letter-spacing:2px;margin-top:3px;color:#ac9a92}.topbar nav{display:flex;gap:36px}.topbar nav a{font-size:13px;color:#8b817d;transition:.2s}.topbar nav a:hover,.topbar nav a.selected{color:#c98d85}.music-button{border:1px solid #e9cfc8;border-radius:50px;background:#fff9f7;color:#b88078;padding:11px 18px;font-size:12px}.hero{min-height:680px;display:grid;grid-template-columns:1fr 1fr;position:relative;background:radial-gradient(circle at 74% 38%,#fff3e9 0,transparent 42%),linear-gradient(115deg,#fffaf7,#fff0e9);padding:88px max(8vw,30px) 65px;gap:30px}.hero-copy{z-index:1;max-width:580px;align-self:center}.eyebrow{font-size:11px;letter-spacing:3px;color:#b9958c;display:flex;align-items:center;gap:12px}.line{width:28px;height:1px;background:#d5aaa0}.tiny-tag{margin-top:36px;font-size:13px;color:#c28d88;letter-spacing:3px}.hero h1{font-family:'Noto Serif SC',serif;font-size:clamp(43px,5vw,76px);line-height:1.45;letter-spacing:3px;color:#66514d;font-weight:600;margin:18px 0}.script{color:#d79a92;position:relative}.star{position:absolute;right:-30px;top:-12px;font-family:serif;font-size:30px;color:#e4bc86}.hero-sub{line-height:2.2;color:#9a8983;font-size:15px;margin-bottom:32px}.primary{background:#c99189;border:0;border-radius:50px;color:#fff;padding:16px 29px;box-shadow:0 9px 20px #d9aaa35c;font-size:13px;letter-spacing:1px;transition:transform .2s}.primary:hover{transform:translateY(-3px)}.primary span{margin-left:15px}.hero-foot{margin-top:72px;display:flex;gap:34px;color:#b9a49a;font-size:10px;letter-spacing:2px}.hero-art{position:relative;min-height:500px;display:flex;align-items:center;justify-content:center}.orbit{position:absolute;border:1px solid #ead7cc;border-radius:50%;transform:rotate(-17deg)}.orbit-one{width:470px;height:390px}.orbit-two{width:380px;height:470px;transform:rotate(35deg);border-style:dashed}.portrait{width:330px;height:410px;border-radius:49% 49% 45% 45%;padding:15px;background:#f6d7cc;box-shadow:25px 28px 0 #f6e5d8,0 20px 50px #e6c6b97d;transform:rotate(5deg);z-index:1}.portrait-inner{width:100%;height:100%;border-radius:48%;background:radial-gradient(circle at 45% 42%,#fff9ed,#f8e4d9);border:2px solid #fff8f3;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:40px}.baby-face{width:140px;height:140px;border-radius:50%;background:#f9d3bb;display:flex;align-items:center;justify-content:center;font-size:85px;color:#a47b6a;box-shadow:inset -10px -10px 0 #f0c3ae}.portrait-inner span{font-size:11px;letter-spacing:3px;color:#b89487}.cloud{position:absolute;font-size:100px;color:#fff;z-index:2;filter:drop-shadow(0 8px 8px #e9cfc25c)}.cloud-left{left:-15px;top:50px}.cloud-right{right:-5px;bottom:65px}.moon{position:absolute;right:12%;top:5%;font-size:94px;color:#eacfae}.floating-heart{position:absolute;color:#d7a59a;font-size:48px}.heart-one{left:5%;bottom:15%}.heart-two{right:8%;top:35%}.art-caption{position:absolute;bottom:-5px;font-size:13px;font-style:italic;color:#b69b91}.hero-sparkle{position:absolute;color:#e5c7b2;font-size:24px}.s1{left:48%;top:15%}.s2{left:6%;bottom:10%}.s3{right:4%;top:10%}.marquee{background:#d5a59e;color:#fff9f4;white-space:nowrap;overflow:hidden;padding:18px 0;font-size:12px;letter-spacing:4px;text-align:center}.section{padding:110px max(8vw,28px)}.section-head{display:flex;justify-content:space-between;align-items:end;margin-bottom:48px}.section-head.centered{display:block;text-align:center}.kicker{font-size:11px;letter-spacing:3px;color:#c78d86}.section h2{font-family:'Noto Serif SC',serif;font-size:clamp(31px,3.4vw,48px);color:#5f504a;font-weight:600;margin:18px 0}.section h2 span{color:#d29b93}.section-head p{color:#a3958f;font-size:14px}.flower{font-size:28px;margin-left:12px}.hand-note{font-family:serif;font-size:20px;font-style:italic;line-height:1.5;color:#d4aaa2;transform:rotate(-9deg)}.gallery-section{background:#fffdfb}.gallery-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:22px}.photo-card{border:0;background:#fff;padding:10px 10px 18px;text-align:left;box-shadow:0 10px 35px #ab8c7a1c;position:relative;transition:transform .25s}.photo-card:hover{transform:translateY(-9px) rotate(-1deg)}.photo-placeholder{height:270px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;position:relative;overflow:hidden}.photo-placeholder img,.invite-border>img,.lightbox-image img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:2}.peach .photo-placeholder,.lightbox-image.peach{background:linear-gradient(140deg,#f5ddd0,#faeae1)}.lavender .photo-placeholder,.lightbox-image.lavender{background:linear-gradient(140deg,#e9e1ed,#f7eef3)}.butter .photo-placeholder,.lightbox-image.butter{background:linear-gradient(140deg,#f4ebcf,#fff6e5)}.rose .photo-placeholder,.lightbox-image.rose{background:linear-gradient(140deg,#efd6d9,#f9e7e7)}.photo-icon{font-size:85px;color:#fff8f4;text-shadow:0 3px 15px #b89c9059}.photo-placeholder-text{font-size:11px;color:#b9a6a1;letter-spacing:1px}.photo-caption{display:flex;justify-content:space-between;align-items:center;padding:17px 8px 0}.photo-caption h3{margin:0 0 7px;font-family:'Noto Serif SC',serif;font-size:16px}.photo-caption p{margin:0;font-size:11px;color:#aa9b95}.photo-caption>span{font-size:22px;color:#d5a29a}.photo-number{position:absolute;top:20px;left:20px;font-size:11px;color:#b58e86;z-index:2}.gallery-tip{text-align:center;color:#b8aaa3;font-size:12px;margin:36px 0 0}.timeline-section{background:#fcf5f0}.timeline{max-width:900px;margin:65px auto 0;display:grid;grid-template-columns:1fr 1fr;gap:25px}.milestone{background:#fffdfa;border:1px solid #f1e5dd;border-radius:8px;padding:32px;display:flex;gap:24px;position:relative;box-shadow:0 12px 24px #bda59710}.milestone-symbol{background:#faeee9;width:62px;height:62px;flex-shrink:0;border-radius:50%;display:grid;place-items:center;color:#ce9a8d;font-size:29px}.milestone-day{font-size:10px;letter-spacing:2px;color:#c5a096}.milestone h3{font-family:'Noto Serif SC',serif;font-size:20px;margin:9px 0}.milestone p{font-size:12px;color:#a49891;line-height:1.9}.milestone-index{position:absolute;right:24px;top:20px;color:#e7d9d1;font-size:12px}.invitation-section{background:#fffdfa}.invite-wrap{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:12%;max-width:1150px;margin:auto}.invite-intro p{line-height:2.2;color:#9d8d86;font-size:15px}.invite-date{display:inline-block;margin:26px 0;background:#f9ece6;border-radius:50px;padding:12px 20px;color:#b9827a;font-size:13px}.invite-intro .muted{font-size:12px;color:#b7aaa3}.invite-card{background:#e9d1c5;padding:20px;max-width:440px;width:100%;margin:auto;box-shadow:18px 20px 0 #f6e8df;transform:rotate(2deg)}.invite-border{border:1px solid #fff7ee;min-height:540px;position:relative;text-align:center;background:#fff9f2;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px}.invite-deco{color:#d4a995;font-size:23px}.invite-small{font-size:10px;letter-spacing:4px;color:#bca096;margin-top:32px}.invite-script{font-family:Georgia,serif;font-style:italic;font-size:31px;color:#c5948b;margin-top:18px}.invite-main{font-family:'Noto Serif SC',serif;font-size:48px;color:#b98b7e;margin-top:25px}.invite-rule{width:70px;height:1px;background:#dcb8a8;margin:28px auto}.invite-message{font-size:13px;line-height:2.3;color:#a48b80}.invite-bottom{position:absolute;bottom:30px;font-size:10px;letter-spacing:3px;color:#c6a397}.wishes-section{background:#fdf5f1}.wish-panel{max-width:680px;margin:auto;text-align:center;background:#fffdfa;padding:40px 50px;box-shadow:0 15px 40px #d8bcb020}.wish-quote{font-family:'Noto Serif SC',serif;font-size:21px;line-height:2;color:#b58a83;margin-bottom:25px}.wish-panel form{text-align:left}.wish-panel label{display:block;color:#a58c83;font-size:13px;margin-bottom:10px}.wish-panel textarea{width:100%;resize:vertical;border:1px solid #eadbd3;border-radius:5px;padding:14px;font:inherit;color:#66514d;background:#fff;outline-color:#d3a19b}.wish-panel .primary{margin-top:14px}.local-note{font-size:11px;color:#b2a39d}.wish-list{margin-top:22px;text-align:left}.wish-list div{border-top:1px solid #f3e6e0;padding:12px 0;color:#a18078;font-size:13px}footer{background:#c9968e;color:#fff;text-align:center;padding:75px 20px}footer .footer-flower{font-size:35px}footer h2{font-family:'Noto Serif SC',serif;font-size:29px;font-weight:500}footer p{font-size:13px;color:#fff0e9}footer span{display:block;margin-top:36px;font-size:10px;letter-spacing:4px}.lightbox{position:fixed;inset:0;background:#332d2bd9;display:grid;place-items:center;z-index:10;padding:24px}.lightbox-card{position:relative;background:#fffdfb;padding:20px 20px 30px;text-align:center;max-width:460px;width:100%}.close{position:absolute;right:12px;top:4px;font-size:30px;border:0;background:none;z-index:4;color:#765f58}.lightbox-image{height:350px;position:relative;display:grid;place-items:center}.lightbox-image span{font-size:120px;color:#fff}.lightbox-card h3{font-family:'Noto Serif SC',serif}.lightbox-card p{font-size:13px;color:#a99791}.audio-panel{position:fixed;right:24px;bottom:24px;z-index:5;background:#fffdfbf2;box-shadow:0 5px 25px #94766d45;border:1px solid #f0e1da;border-radius:50px;display:flex;align-items:center;gap:10px;padding:10px 17px;color:#b9847c;font-size:12px}.audio-panel button{background:none;border:0;color:#b9847c}.audio-panel input{width:72px;accent-color:#c99189}
-@media(max-width:900px){.topbar{height:auto;min-height:75px;flex-wrap:wrap;gap:12px;padding:16px 20px}.topbar nav{order:3;width:100%;justify-content:space-between;gap:8px}.topbar nav a{font-size:12px}.hero{grid-template-columns:1fr;padding:65px 30px}.hero-art{min-height:450px}.hero-foot{margin-top:40px}.gallery-grid{grid-template-columns:repeat(2,1fr)}.invite-wrap{grid-template-columns:1fr;gap:60px}.section{padding:75px 28px}}@media(max-width:540px){.brand{font-size:16px}.brand-mark{font-size:27px}.music-button{font-size:11px;padding:9px 12px}.hero{padding:54px 22px}.hero h1{font-size:45px}.hero-art{min-height:340px}.portrait{width:225px;height:290px}.baby-face{width:100px;height:100px;font-size:60px}.orbit-one{width:310px;height:260px}.orbit-two{width:270px;height:340px}.cloud{font-size:70px}.moon{font-size:65px}.gallery-grid{gap:14px}.photo-placeholder{height:175px}.photo-caption h3{font-size:13px}.photo-caption p{font-size:10px}.hand-note{display:none}.timeline{grid-template-columns:1fr}.invite-border{min-height:450px}.invite-main{font-size:39px}.wish-panel{padding:30px 20px}.audio-panel{right:10px;bottom:10px}.section h2{font-size:32px}}
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Nunito:wght@400;500;600;700;800&display=swap');
+:root{font-family:'Nunito','PingFang SC','Microsoft YaHei',sans-serif;color:#6c4b36;font-synthesis:none}*{box-sizing:border-box}body{margin:0}button{font:inherit;cursor:pointer}button:focus-visible{outline:3px solid #bb8461;outline-offset:4px}.memory-world{min-height:100vh;position:relative;overflow:hidden;isolation:isolate;padding:6.2vh 6vw 18px;background:repeating-linear-gradient(90deg,transparent 0,rgba(111,59,22,.065) 2px,transparent 4px,transparent 155px,rgba(255,255,255,.22) 158px,transparent 163px),repeating-linear-gradient(0deg,transparent 0,rgba(100,56,23,.04) 1px,transparent 2px,transparent 32px),linear-gradient(100deg,#d4aa7d 0%,#e9cba5 18%,#f1d5b1 42%,#d6ac7d 76%,#e7c399 100%)}.memory-world:before{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 47% 8%,rgba(255,255,240,.48),transparent 65%),linear-gradient(110deg,rgba(94,47,19,.13),transparent 35%,rgba(92,42,18,.12));mix-blend-mode:multiply}.sunlight{position:absolute;inset:-20%;pointer-events:none;background:linear-gradient(117deg,transparent 12%,rgba(255,255,241,.19) 19%,transparent 26%,rgba(255,255,240,.19) 35%,transparent 43%);transform:rotate(-8deg)}.desk-props{position:absolute;inset:0;pointer-events:none}.coffee{position:absolute;left:-5.5%;top:3%;width:clamp(150px,23vw,330px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 50% 50%,#c8a37a 0 50%,#eee1cf 51% 63%,#fff5e6 65% 71%,#d6bca1 73%);box-shadow:13px 24px 33px #6e4c2d60,inset 2px 2px 9px #fff}.coffee:after{content:'';position:absolute;right:-14%;top:35%;width:22%;height:28%;border:19px solid #f5e9d7;border-radius:50%;z-index:-1}.coffee-liquid{position:absolute;inset:18%;border-radius:50%;background:radial-gradient(circle at 50% 48%,#ddc1a0 0 22%,#ab7549 25% 63%,#704326 73%,#d8b48e 85%);display:grid;place-items:center;color:#f7e8d5;font-size:45px;filter:blur(.2px)}.saucer{position:absolute;right:26%;top:-15%;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,#e8d9bd 0 23%,#faf1dd 24% 48%,#d3b99c 50%,#f5e8d2 59%,#aa835e 61%);box-shadow:10px 16px 22px #6e4c2d40}.plant{position:absolute;right:-2%;top:-3%;width:clamp(160px,21vw,270px);height:clamp(160px,21vw,270px);border-radius:50%;background:radial-gradient(circle,#604b33 0 42%,#f2e7d6 45% 60%,#b5a18c 63%,transparent 65%);filter:drop-shadow(12px 16px 13px #71502c66)}.leaf{position:absolute;left:45%;top:42%;width:24%;height:43%;border-radius:75% 4% 75% 10%;background:linear-gradient(100deg,#506846,#94a87b 54%,#526b4b);transform-origin:20% 15%}.l1{transform:rotate(0deg) translateY(-47%)}.l2{transform:rotate(45deg) translateY(-47%)}.l3{transform:rotate(90deg) translateY(-47%)}.l4{transform:rotate(135deg) translateY(-47%)}.l5{transform:rotate(180deg) translateY(-47%)}.l6{transform:rotate(225deg) translateY(-47%)}.l7{transform:rotate(270deg) translateY(-47%)}.l8{transform:rotate(315deg) translateY(-47%)}.plant-center{position:absolute;left:44%;top:42%;width:22%;height:22%;border-radius:50%;background:#a0ac7b}.flower{position:absolute;font-family:serif;color:#f4e8c7;text-shadow:2px 3px 4px #6d573e66;font-size:55px;letter-spacing:14px;transform:rotate(35deg)}.flower i{font-size:35px}.flower-left{left:-5%;bottom:14%}.flower-right{right:-5%;top:42%;transform:rotate(-26deg)}.notebook{position:absolute;right:-9%;bottom:-22%;width:37%;height:37%;transform:rotate(-21deg);background:repeating-linear-gradient(#f9f5e9 0 22px,#c5b6a5 23px,#f9f5e9 24px);box-shadow:-16px -12px 24px #5e3e2552;border:13px solid #e6d5b9}.pencil{position:absolute;right:9%;bottom:-6%;width:10px;height:34%;transform:rotate(49deg);background:linear-gradient(90deg,#6d3b30,#d0a082,#7d4734);box-shadow:4px 8px 7px #76533380}.glass-board{position:relative;width:min(1190px,100%);min-height:780px;margin:auto;border-radius:33px;padding:25px 34px 24px;background:linear-gradient(125deg,rgba(255,253,244,.81),rgba(255,250,240,.67));border:1px solid #fff9;box-shadow:0 32px 65px #6b442b55,0 0 0 10px #fff4,inset 0 1px 5px #fff;backdrop-filter:blur(5px)}.glass-board:before{content:'';position:absolute;inset:10px;border-radius:25px;border:1px solid #fff8;pointer-events:none}.board-header{position:relative;z-index:25;display:flex;align-items:center;justify-content:space-between;gap:12px}.identity{display:flex;align-items:center;gap:9px}.identity-icon{font-size:32px;color:#b78a6b}.identity strong{display:block;font-family:'DM Serif Display',serif;font-size:19px;letter-spacing:.4px}.identity small{display:block;font-size:10px;letter-spacing:2px;color:#b89b85}.view-switch{display:flex;gap:4px;background:#fff9;padding:5px;border-radius:50px;box-shadow:0 3px 14px #84624817}.view-switch button{border:0;background:transparent;color:#a48b75;border-radius:40px;padding:8px 15px;font-size:12px;font-weight:800}.view-switch button.chosen{background:#fff;color:#77553e;box-shadow:0 2px 8px #a38a6d26}.sound-control{border:1px solid #bda18966;background:#fff9;color:#87674c;border-radius:30px;padding:9px 15px;font-size:12px}.table-view{position:relative;min-height:690px}.headline{text-align:center;padding-top:27px;position:relative;z-index:2;pointer-events:none}.overline{font-size:10px;letter-spacing:4px;color:#b58a67;font-weight:800}.headline h1,.timeline-intro h2{font-size:clamp(31px,3.4vw,48px);line-height:1.45;margin:13px 0 8px;letter-spacing:3px;font-weight:800;color:#845d3d}.headline h1 em,.timeline-intro h2 em{font-style:normal;color:#b88255}.headline p{font-size:13px;letter-spacing:2px;color:#a48b78}.divider-star{color:#caa989;letter-spacing:9px;font-size:12px;margin-top:10px}.little-sticker{position:absolute;z-index:4;width:85px;height:85px;background:#fffdf5d9;box-shadow:3px 6px 16px #8461442b;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#bca18d;font-size:36px;transform:rotate(-9deg)}.little-sticker span{font-size:8px;letter-spacing:2px}.sticker-one{top:66px;left:11%}.sticker-two{top:70px;right:9%;transform:rotate(8deg)}.photos-scene{position:absolute;inset:115px 0 0;pointer-events:none}.polaroid{position:absolute;left:var(--x);top:var(--y);z-index:var(--order);width:clamp(135px,17vw,205px);height:clamp(183px,22vw,268px);border:0;padding:9px 9px 27px;background:#fffdfa;box-shadow:2px 8px 12px #6c4d3666,0 1px 2px #59412a33;transform:translate(-50%,-50%) rotate(var(--r));transition:transform .35s cubic-bezier(.2,.8,.2,1),box-shadow .35s;pointer-events:auto;text-align:left;display:flex;flex-direction:column;will-change:transform}.polaroid:hover,.polaroid:focus-visible{z-index:20;transform:translate(-50%,-58%) rotate(0deg) scale(1.16);box-shadow:0 26px 32px #68493275,0 0 0 1px #fff}.photo-image{display:block;width:100%;flex:1;min-height:0;position:relative;overflow:hidden;background:var(--tone)}.photo-image img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:2;filter:saturate(.78) sepia(.1)}.photo-fallback{position:absolute;inset:0;display:grid;place-items:center;font-size:55px;color:#fff9}.photo-handwriting{font-family:'DM Serif Display','STKaiti',serif;color:#80604c;font-size:14px;padding:8px 4px 0;white-space:nowrap}.photo-date{font-size:8px;color:#b2a08f;letter-spacing:1.5px;padding-left:4px}.hover-hint{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);background:#fffefaee;border-radius:20px;white-space:nowrap;padding:7px 11px;font-size:11px;color:#78533d;opacity:0;transition:opacity .25s;z-index:3}.polaroid:hover .hover-hint,.polaroid:focus-visible .hover-hint{opacity:1}.paper-note{position:absolute;z-index:9;left:50%;top:50%;transform:translate(-50%,-43%) rotate(-1.2deg);width:clamp(215px,25%,280px);min-height:320px;background:linear-gradient(130deg,#fffefb,#f6f0e8);box-shadow:5px 12px 21px #72533955;padding:27px 23px 18px;display:flex;flex-direction:column;gap:12px}.note-pin{position:absolute;right:19px;top:13px;color:#ba9d77;font-size:20px}.note-date{font-family:'DM Serif Display',serif;font-style:italic;color:#a58b72;font-size:12px}.paper-note strong{font-family:'STKaiti','KaiTi',serif;font-size:24px;font-weight:400;color:#6e503d}.paper-note p{font-family:'STKaiti','KaiTi',serif;line-height:1.9;font-size:16px;color:#715b4c;margin:0}.note-sign{font-family:'DM Serif Display',serif;font-style:italic;color:#b68d75;font-size:15px;margin-top:auto}.paper-note button{align-self:flex-start;border:0;background:transparent;color:#785438;font-size:11px;font-weight:800;padding:8px 0}.paper-note button:hover{text-decoration:underline}.table-bottom{position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:space-between;color:#b08e74;font-size:10px;letter-spacing:1.5px}.timeline-view{padding:48px 8% 25px;min-height:690px}.timeline-intro{text-align:center}.timeline-intro h2{font-size:36px}.timeline-intro p{font-size:13px;color:#a58d77}.timeline-list{max-width:720px;margin:32px auto 0;border-left:1px solid #bda28a70;padding-left:28px}.timeline-entry{width:100%;display:flex;align-items:center;gap:20px;border:0;border-bottom:1px solid #cbb8a77a;background:#fff8;text-align:left;padding:12px 16px;margin-bottom:10px;border-radius:8px;transition:transform .2s,background .2s}.timeline-entry:hover{transform:translateX(7px);background:#fff}.timeline-number{font-family:'DM Serif Display',serif;color:#bd9b7b}.timeline-entry img{width:78px;height:80px;object-fit:cover;background:#e4d2be}.timeline-words{display:flex;flex-direction:column;gap:4px;flex:1}.timeline-words small{font-size:10px;color:#b58f72}.timeline-words strong{font-size:17px;color:#765239}.timeline-words>span{font-size:12px;color:#9f8b7b}.entry-arrow{font-size:24px;color:#b18a6b}.world-footer{position:relative;width:min(1190px,100%);margin:28px auto 0;display:flex;justify-content:space-between;color:#fff5e7;font-size:11px;letter-spacing:1.5px;text-shadow:1px 1px 3px #674d3b}.story-overlay{position:fixed;z-index:100;inset:0;background:#34261fbb;backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:72px 25px 30px}.close-story{position:absolute;right:5vw;top:26px;background:#fffef1;border:0;border-radius:30px;padding:12px 22px;color:#73563e;font-size:12px}.storybook{display:grid;grid-template-columns:1fr 1fr;width:min(850px,95vw);height:min(580px,78vh);background:#faf5e9;border-radius:4px 14px 14px 4px;box-shadow:15px 22px 55px #120c0b99;overflow:hidden;transform-origin:center;animation:book-open .5s ease-out}.book-photo{position:relative;overflow:hidden;background:#d8c2a8}.book-photo img{width:100%;height:100%;object-fit:cover;filter:saturate(.8)}.book-photo-label{position:absolute;bottom:25px;left:24px;background:#fff9;padding:10px 14px;font-size:10px;letter-spacing:2px}.book-paper{position:relative;padding:36px 40px;display:flex;flex-direction:column;box-shadow:inset 13px 0 22px #a4876122;background:repeating-linear-gradient(0deg,#faf6ee 0 28px,#efe8dc 29px,#faf6ee 30px)}.book-topline{display:flex;justify-content:space-between;font-size:9px;letter-spacing:1px;color:#a58b73}.book-sparkle{text-align:center;font-size:33px;color:#bb9675;margin-top:25px}.book-paper h2{text-align:center;font-family:'STKaiti','KaiTi',serif;font-size:31px;font-weight:400;margin:10px 0;color:#78553c}.book-english{text-align:center;font-size:11px;letter-spacing:2px;color:#b4947c}.story-text{font-family:'STKaiti','KaiTi',serif;font-size:20px;line-height:2.1;color:#6e5948;margin-top:36px;animation:fade-in .3s ease}.book-sign{font-family:'DM Serif Display',serif;font-style:italic;color:#b08d72;margin-top:auto;text-align:right}.book-controls{display:flex;justify-content:space-between;align-items:center;margin-top:22px;padding-top:13px;border-top:1px solid #d5c6b5;font-size:11px;color:#a38a75}.book-controls button{border:0;background:transparent;color:#795a43;font-size:12px;padding:8px 0}.book-controls button:disabled{opacity:.3;cursor:default}.story-enter-active,.story-leave-active{transition:opacity .3s}.story-enter-from,.story-leave-to{opacity:0}@keyframes book-open{from{opacity:.4;transform:perspective(900px) rotateY(-16deg) scale(.8)}to{opacity:1;transform:perspective(900px) rotateY(0) scale(1)}}@keyframes fade-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:800px){.memory-world{padding:32px 15px 15px}.glass-board{padding:18px 17px;min-height:730px}.identity small{display:none}.identity strong{font-size:14px}.sound-control{font-size:0;padding:8px}.sound-control:before{content:'♫';font-size:18px}.view-switch button{font-size:10px;padding:8px}.headline{padding-top:45px}.headline h1{font-size:31px}.headline p{font-size:11px}.sticker-one{left:0;top:65px;width:50px;height:50px;font-size:23px}.sticker-two{right:0;top:65px;width:50px;height:50px;font-size:23px}.little-sticker span{font-size:6px}.table-view{min-height:650px}.photos-scene{inset:160px 0 0}.polaroid{width:clamp(112px,30vw,170px);height:clamp(150px,40vw,230px);padding:6px 6px 21px}.photo-handwriting{font-size:11px}.photo-date{font-size:7px}.paper-note{top:53%;width:210px;min-height:245px;padding:18px;gap:6px}.paper-note strong{font-size:20px}.paper-note p{font-size:13px}.note-sign{font-size:12px}.table-bottom span:first-child{display:none}.table-bottom{font-size:9px}.timeline-view{padding:45px 0 20px}.storybook{height:min(680px,80vh);grid-template-columns:1fr;grid-template-rows:38% 62%;width:min(440px,95vw)}.book-paper{padding:15px 25px}.book-sparkle{display:none}.book-paper h2{font-size:24px;margin:7px 0}.story-text{font-size:17px;margin-top:16px}.book-sign{font-size:12px}.book-controls{margin-top:8px}.world-footer span:last-child{display:none}}@media(max-width:480px){.memory-world{padding-top:50px}.glass-board{min-height:720px}.table-view{min-height:650px}.photos-scene{inset:200px 0 0}.polaroid{width:116px;height:154px}.paper-note{top:51%;min-height:232px}.headline h1{font-size:27px}.headline p{max-width:230px;margin:12px auto}.photo-handwriting{font-size:10px}.table-bottom span:last-child{display:none}.coffee{top:-3%}.plant{top:-3%}.timeline-entry{gap:9px;padding:9px}.timeline-entry img{width:55px;height:60px}.timeline-words strong{font-size:14px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
