@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: vue-spring-clock
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    autoDeployTrigger: commit
